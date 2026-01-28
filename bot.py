@@ -2,7 +2,7 @@ import logging
 import re
 from configparser import ConfigParser
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from pathlib import Path
 import sys
 from typing import Dict, List, Optional, Tuple
@@ -161,6 +161,8 @@ def infer_due_datetime(message_text: str, now: datetime, timezone: ZoneInfo) -> 
         )
     elif time_match:
         due = datetime.combine(now.date(), time_match.time(), tzinfo=timezone)
+        if due <= now:
+            due = due + timedelta(days=1)
     else:
         due = matches[0][1].astimezone(timezone)
 
