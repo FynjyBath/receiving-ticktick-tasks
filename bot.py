@@ -102,6 +102,8 @@ def infer_due_datetime(message_text: str, now: datetime, timezone: ZoneInfo) -> 
         message_text,
         languages=["ru", "en"],
         settings={
+            "DATE_ORDER": "DMY",
+            "PREFER_DATES_FROM": "future",
             "RETURN_AS_TIMEZONE_AWARE": True,
             "TIMEZONE": timezone.key,
             "RELATIVE_BASE": now,
@@ -110,16 +112,40 @@ def infer_due_datetime(message_text: str, now: datetime, timezone: ZoneInfo) -> 
     if not matches:
         return default_due
 
-    matched_text, parsed_datetime = matches[0]
-    has_date = bool(DATE_PATTERN.search(matched_text))
-    has_time = bool(TIME_PATTERN.search(matched_text))
+    combined_match = None
+    date_match = None
+    time_match = None
 
-    if has_date and not has_time:
-        due = datetime.combine(parsed_datetime.date(), time(23, 0), tzinfo=timezone)
-    elif has_time and not has_date:
-        due = datetime.combine(now.date(), parsed_datetime.time(), tzinfo=timezone)
+    for matched_text, parsed_datetime in matches:
+        has_date = bool(DATE_PATTERN.search(matched_text))
+        has_time = bool(TIME_PATTERN.search(matched_text))
+
+        if has_date and has_time:
+            combined_match = parsed_datetime
+            break
+        if has_date and date_match is None:
+            date_match = parsed_datetime
+        if has_time and not has_date and time_match is None:
+            time_match = parsed_datetime
+
+    if combined_match:
+        due = combined_match.astimezone(timezone)
+    elif date_match and time_match:
+        due = datetime.combine(
+            date_match.astimezone(timezone).date(),
+            time_match.time(),
+            tzinfo=timezone,
+        )
+    elif date_match:
+        due = datetime.combine(
+            date_match.astimezone(timezone).date(),
+            time(23, 0),
+            tzinfo=timezone,
+        )
+    elif time_match:
+        due = datetime.combine(now.date(), time_match.time(), tzinfo=timezone)
     else:
-        due = parsed_datetime.astimezone(timezone)
+        due = matches[0][1].astimezone(timezone)
 
     if due <= now:
         return default_due
