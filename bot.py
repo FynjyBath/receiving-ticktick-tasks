@@ -268,6 +268,8 @@ def build_task_payload(text: str, config: Config) -> Tuple[Dict[str, str], datet
         "title": text,
         "projectId": config.ticktick_project_id,
         "dueDate": due_datetime.strftime("%Y-%m-%dT%H:%M:%S.000%z"),
+        "timeZone": config.timezone.key,
+        "reminders": ["TRIGGER:PT0S"],
     }
     return payload, due_datetime
 
