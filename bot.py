@@ -13,6 +13,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 @dataclass(frozen=True)
 class Config:
     telegram_token: str
+    notify_chat_id: int | None
     ticktick_access_token: str
     ticktick_project_id: str
     timezone: ZoneInfo
@@ -37,6 +38,7 @@ def load_config(config_path: Path | None = None) -> Config:
         return value or None
 
     telegram_token = get_required("telegram", "bot_token")
+    notify_chat_id_raw = parser.get("telegram", "notify_chat_id", fallback="").strip()
     ticktick_access_token = get_required("ticktick", "access_token")
     ticktick_project_id = get_required("ticktick", "project_id")
 
@@ -59,8 +61,18 @@ def load_config(config_path: Path | None = None) -> Config:
         "ticktick", "base_url", fallback="https://api.ticktick.com"
     )
 
+    notify_chat_id: int | None = None
+    if notify_chat_id_raw:
+        try:
+            notify_chat_id = int(notify_chat_id_raw)
+        except ValueError as exc:
+            raise RuntimeError(
+                "Invalid telegram.notify_chat_id value; expected integer chat ID."
+            ) from exc
+
     return Config(
         telegram_token=telegram_token,
+        notify_chat_id=notify_chat_id,
         ticktick_access_token=ticktick_access_token,
         ticktick_project_id=ticktick_project_id,
         timezone=ZoneInfo(timezone_name),
@@ -82,11 +94,18 @@ def build_task_payload(text: str, config: Config) -> dict:
     }
 
 
-def format_task_text(message_text: str, sender_username: str | None, sender_name: str | None) -> str:
+def format_sender_label(sender_username: str | None, sender_name: str | None) -> str:
     if sender_username:
-        sender_label = f"@{sender_username}"
-    else:
-        sender_label = sender_name or "Неизвестный отправитель"
+        return f"@{sender_username}"
+    return sender_name or "Неизвестный отправитель"
+
+
+def format_task_text(
+    message_text: str,
+    sender_username: str | None,
+    sender_name: str | None,
+) -> str:
+    sender_label = format_sender_label(sender_username, sender_name)
     return f"{sender_label} {message_text}"
 
 
@@ -106,6 +125,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     config: Config = context.bot_data["config"]
     sender = update.message.from_user
+    sender_label = format_sender_label(
+        sender.username if sender else None,
+        sender.full_name if sender else None,
+    )
     task_text = format_task_text(
         text,
         sender.username if sender else None,
@@ -121,6 +144,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
     if response.is_success:
         await update.message.reply_text(f"Задача добавлена ✅\n{task_text}")
+        if config.notify_chat_id:
+            await context.bot.send_message(
+                chat_id=config.notify_chat_id,
+                text=f"Новая задача от {sender_label}:\n{text}",
+            )
     else:
         logging.error(
             "TickTick API error %s: %s", response.status_code, response.text
