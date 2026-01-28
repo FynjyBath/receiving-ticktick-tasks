@@ -5,13 +5,14 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from pathlib import Path
 import sys
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 if sys.version_info < (3, 9):
     from backports.zoneinfo import ZoneInfo
 else:
     from zoneinfo import ZoneInfo
 
+from dateparser import parse as parse_date
 from dateparser.search import search_dates
 import httpx
 from telegram import Update
@@ -104,6 +105,16 @@ def load_config(config_path: Optional[Path] = None) -> Config:
 
 def infer_due_datetime(message_text: str, now: datetime, timezone: ZoneInfo) -> datetime:
     default_due = datetime.combine(now.date(), time(23, 0), tzinfo=timezone)
+    numeric_candidates = _extract_numeric_date_candidates(message_text, now, timezone)
+    if numeric_candidates:
+        for candidate in numeric_candidates:
+            if candidate["has_time"]:
+                due = candidate["datetime"]
+                if due > now:
+                    return due
+        due = numeric_candidates[0]["datetime"]
+        return due if due > now else default_due
+
     matches = search_dates(
         message_text,
         languages=["ru", "en"],
@@ -156,6 +167,96 @@ def infer_due_datetime(message_text: str, now: datetime, timezone: ZoneInfo) -> 
     if due <= now:
         return default_due
     return due
+
+
+def _extract_numeric_date_candidates(
+    message_text: str,
+    now: datetime,
+    timezone: ZoneInfo,
+) -> List[Dict[str, object]]:
+    candidates = []
+    for match in re.finditer(r"\b\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?\b", message_text):
+        date_value = _parse_numeric_date(match.group(0), now)
+        if date_value is None:
+            continue
+        time_value = _find_time_near_match(message_text, match, now, timezone)
+        candidate_datetime = datetime.combine(
+            date_value,
+            time_value or time(23, 0),
+            tzinfo=timezone,
+        )
+        candidates.append(
+            {
+                "datetime": candidate_datetime,
+                "has_time": time_value is not None,
+                "position": match.start(),
+            }
+        )
+    return sorted(candidates, key=lambda item: item["position"])
+
+
+def _parse_numeric_date(date_text: str, now: datetime) -> Optional[datetime.date]:
+    parts = re.split(r"[./-]", date_text)
+    if len(parts) < 2:
+        return None
+    try:
+        day = int(parts[0])
+        month = int(parts[1])
+        if len(parts) >= 3:
+            year = int(parts[2])
+            if year < 100:
+                year += 2000
+        else:
+            year = now.year
+        parsed_date = datetime(year, month, day).date()
+    except ValueError:
+        return None
+
+    if len(parts) < 3 and parsed_date < now.date():
+        try:
+            parsed_date = datetime(year + 1, month, day).date()
+        except ValueError:
+            return None
+    return parsed_date
+
+
+def _find_time_near_match(
+    text: str,
+    match: re.Match,
+    now: datetime,
+    timezone: ZoneInfo,
+) -> Optional[time]:
+    window_before = text[max(0, match.start() - 12) : match.start()]
+    window_after = text[match.end() : match.end() + 20]
+    for window in (window_after, window_before):
+        time_match = TIME_PATTERN.search(window)
+        if time_match:
+            return _parse_time_text(time_match.group(0), now, timezone)
+    return None
+
+
+def _parse_time_text(time_text: str, now: datetime, timezone: ZoneInfo) -> Optional[time]:
+    if re.search(r"[:.]", time_text):
+        raw = time_text.replace(".", ":")
+        parts = raw.split(":")
+        try:
+            hour = int(parts[0])
+            minute = int(parts[1]) if len(parts) > 1 else 0
+            return time(hour=hour, minute=minute)
+        except ValueError:
+            return None
+    parsed = parse_date(
+        time_text,
+        languages=["ru", "en"],
+        settings={
+            "RETURN_AS_TIMEZONE_AWARE": True,
+            "TIMEZONE": timezone.key,
+            "RELATIVE_BASE": now,
+        },
+    )
+    if parsed:
+        return parsed.astimezone(timezone).time()
+    return None
 
 
 def build_task_payload(text: str, config: Config) -> Tuple[Dict[str, str], datetime]:
