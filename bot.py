@@ -1,7 +1,8 @@
 import logging
-import os
+from configparser import ConfigParser
 from dataclasses import dataclass
 from datetime import datetime, time
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -18,26 +19,45 @@ class Config:
     ticktick_base_url: str
 
 
-def load_config() -> Config:
-    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    ticktick_access_token = os.environ.get("TICKTICK_ACCESS_TOKEN")
-    ticktick_project_id = os.environ.get("TICKTICK_PROJECT_ID")
-    timezone_name = os.environ.get("TIMEZONE", "UTC")
-    ticktick_base_url = os.environ.get("TICKTICK_BASE_URL", "https://api.ticktick.com")
+def load_config(config_path: Path | None = None) -> Config:
+    config_path = config_path or Path(__file__).with_name("config.ini")
+    if not config_path.exists():
+        raise RuntimeError(
+            f"Config file not found: {config_path}. "
+            "Create it from config.ini.example."
+        )
+
+    parser = ConfigParser()
+    parser.read(config_path, encoding="utf-8")
+
+    def get_required(section: str, option: str) -> str | None:
+        if not parser.has_option(section, option):
+            return None
+        value = parser.get(section, option).strip()
+        return value or None
+
+    telegram_token = get_required("telegram", "bot_token")
+    ticktick_access_token = get_required("ticktick", "access_token")
+    ticktick_project_id = get_required("ticktick", "project_id")
 
     missing = [
         name
         for name, value in [
-            ("TELEGRAM_BOT_TOKEN", telegram_token),
-            ("TICKTICK_ACCESS_TOKEN", ticktick_access_token),
-            ("TICKTICK_PROJECT_ID", ticktick_project_id),
+            ("telegram.bot_token", telegram_token),
+            ("ticktick.access_token", ticktick_access_token),
+            ("ticktick.project_id", ticktick_project_id),
         ]
         if not value
     ]
     if missing:
         raise RuntimeError(
-            f"Missing required environment variables: {', '.join(missing)}"
+            f"Missing required config values: {', '.join(missing)}"
         )
+
+    timezone_name = parser.get("app", "timezone", fallback="UTC")
+    ticktick_base_url = parser.get(
+        "ticktick", "base_url", fallback="https://api.ticktick.com"
+    )
 
     return Config(
         telegram_token=telegram_token,

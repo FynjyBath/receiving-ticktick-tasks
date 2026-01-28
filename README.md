@@ -14,23 +14,28 @@ Telegram-бот для добавления задач в TickTick. Каждое
 
 ## Настройка
 
-Создайте файл `.env` на основе `.env.example` и заполните значения:
+Создайте файл `config.ini` на основе `config.ini.example` и заполните значения:
 
 ```ini
-TELEGRAM_BOT_TOKEN=...        # токен Telegram бота
-TICKTICK_ACCESS_TOKEN=...     # OAuth access token TickTick
-TICKTICK_PROJECT_ID=...       # ID списка (project) TickTick
-TIMEZONE=Europe/Moscow        # таймзона для дедлайна (опционально)
-TICKTICK_BASE_URL=https://api.ticktick.com
+[telegram]
+bot_token=...                 # токен Telegram бота
+
+[ticktick]
+access_token=...              # OAuth access token TickTick
+project_id=...                # ID списка (project) TickTick
+base_url=https://api.ticktick.com
+
+[app]
+timezone=Europe/Moscow        # таймзона для дедлайна (опционально)
 ```
 
 ### Как получить TickTick Access Token
 1. Зарегистрируйте приложение и получите доступ к Open API согласно документации: https://developer.ticktick.com/docs#/openapi
 2. Пройдите OAuth-авторизацию и получите `access_token`.
-3. Используйте `access_token` в переменной `TICKTICK_ACCESS_TOKEN`.
+3. Укажите `access_token` в секции `[ticktick]` файла `config.ini`.
 
 ### Как узнать ID списка TickTick
-Используйте Open API TickTick, чтобы получить список проектов (списков) и выбрать нужный `id`. Его значение используйте в `TICKTICK_PROJECT_ID`.
+Используйте Open API TickTick, чтобы получить список проектов (списков) и выбрать нужный `id`. Его значение укажите в `project_id` секции `[ticktick]` файла `config.ini`.
 
 ## Запуск
 
@@ -45,7 +50,6 @@ pip install -r requirements.txt
 2. Запустите бота:
 
 ```bash
-export $(cat .env | xargs)  # или другой способ загрузки env
 python bot.py
 ```
 
