@@ -126,14 +126,19 @@ def infer_due_datetime(message_text: str, now: datetime, timezone: ZoneInfo) -> 
     return due
 
 
-def build_task_payload(text: str, config: Config) -> dict:
+def build_task_payload(text: str, config: Config) -> tuple[dict, datetime]:
     now = datetime.now(config.timezone)
     due_datetime = infer_due_datetime(text, now, config.timezone)
-    return {
+    payload = {
         "title": text,
         "projectId": config.ticktick_project_id,
         "dueDate": due_datetime.strftime("%Y-%m-%dT%H:%M:%S.000%z"),
     }
+    return payload, due_datetime
+
+
+def format_due_datetime(due_datetime: datetime) -> str:
+    return due_datetime.strftime("%d.%m.%Y %H:%M")
 
 
 def format_sender_label(sender_username: str | None, sender_name: str | None) -> str:
@@ -176,7 +181,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         sender.username if sender else None,
         sender.full_name if sender else None,
     )
-    payload = build_task_payload(task_text, config)
+    payload, due_datetime = build_task_payload(task_text, config)
+    due_label = format_due_datetime(due_datetime)
 
     async with httpx.AsyncClient(base_url=config.ticktick_base_url, timeout=10.0) as client:
         response = await client.post(
@@ -185,11 +191,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             headers={"Authorization": f"Bearer {config.ticktick_access_token}"},
         )
     if response.is_success:
-        await update.message.reply_text(f"Задача добавлена ✅\n{task_text}")
+        await update.message.reply_text(
+            f"Задача добавлена ✅\n{task_text}\nДедлайн: {due_label}"
+        )
         if config.notify_chat_id:
             await context.bot.send_message(
                 chat_id=config.notify_chat_id,
-                text=f"Новая задача от {sender_label}:\n{text}",
+                text=f"Новая задача от {sender_label}:\n{text}\nДедлайн: {due_label}",
             )
     else:
         logging.error(
