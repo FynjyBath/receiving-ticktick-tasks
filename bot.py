@@ -159,7 +159,7 @@ def format_task_text(
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
         await update.message.reply_text(
-            "Привет! Отправь мне текст задачи, и я добавлю её в TickTick."
+            "Привет! Отправь мне текст задачи, и я добавлю её в TickTick Антону. При желании можешь указать в том же сообщении дату/время в любом формате, постараюсь их распознать."
         )
 
 
