@@ -1,13 +1,29 @@
 import logging
+import re
 from configparser import ConfigParser
 from dataclasses import dataclass
 from datetime import datetime, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from dateparser.search import search_dates
 import httpx
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+
+DATE_PATTERN = re.compile(
+    r"(\b\d{1,2}[./-]\d{1,2}([./-]\d{2,4})?\b)"
+    r"|(\b(?:январ[ья]|феврал[ья]|март[а]?|апрел[ья]|ма[йя]|июн[ья]|"
+    r"июл[ья]|август[а]?|сентябр[ья]|октябр[ья]|ноябр[ья]|декабр[ья])\b)"
+    r"|(\b(?:понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)\b)"
+    r"|(\b(?:сегодня|завтра|послезавтра)\b)",
+    re.IGNORECASE,
+)
+TIME_PATTERN = re.compile(
+    r"(\b\d{1,2}[:.]\d{2}\b)"
+    r"|(\b\d{1,2}\s*(?:am|pm|утра|дня|вечера|ночи)\b)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -80,17 +96,43 @@ def load_config(config_path: Path | None = None) -> Config:
     )
 
 
-def format_due_date(now: datetime, timezone: ZoneInfo) -> str:
-    due = datetime.combine(now.date(), time(23, 0), tzinfo=timezone)
-    return due.strftime("%Y-%m-%dT%H:%M:%S.000%z")
+def infer_due_datetime(message_text: str, now: datetime, timezone: ZoneInfo) -> datetime:
+    default_due = datetime.combine(now.date(), time(23, 0), tzinfo=timezone)
+    matches = search_dates(
+        message_text,
+        languages=["ru", "en"],
+        settings={
+            "RETURN_AS_TIMEZONE_AWARE": True,
+            "TIMEZONE": timezone.key,
+            "RELATIVE_BASE": now,
+        },
+    )
+    if not matches:
+        return default_due
+
+    matched_text, parsed_datetime = matches[0]
+    has_date = bool(DATE_PATTERN.search(matched_text))
+    has_time = bool(TIME_PATTERN.search(matched_text))
+
+    if has_date and not has_time:
+        due = datetime.combine(parsed_datetime.date(), time(23, 0), tzinfo=timezone)
+    elif has_time and not has_date:
+        due = datetime.combine(now.date(), parsed_datetime.time(), tzinfo=timezone)
+    else:
+        due = parsed_datetime.astimezone(timezone)
+
+    if due <= now:
+        return default_due
+    return due
 
 
 def build_task_payload(text: str, config: Config) -> dict:
     now = datetime.now(config.timezone)
+    due_datetime = infer_due_datetime(text, now, config.timezone)
     return {
         "title": text,
         "projectId": config.ticktick_project_id,
-        "dueDate": format_due_date(now, config.timezone),
+        "dueDate": due_datetime.strftime("%Y-%m-%dT%H:%M:%S.000%z"),
     }
 
 
