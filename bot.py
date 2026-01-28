@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from pathlib import Path
 import sys
+from typing import Optional
 
 if sys.version_info < (3, 9):
     from backports.zoneinfo import ZoneInfo
@@ -34,14 +35,14 @@ TIME_PATTERN = re.compile(
 @dataclass(frozen=True)
 class Config:
     telegram_token: str
-    notify_chat_id: int | None
+    notify_chat_id: Optional[int]
     ticktick_access_token: str
     ticktick_project_id: str
     timezone: ZoneInfo
     ticktick_base_url: str
 
 
-def load_config(config_path: Path | None = None) -> Config:
+def load_config(config_path: Optional[Path] = None) -> Config:
     config_path = config_path or Path(__file__).with_name("config.ini")
     if not config_path.exists():
         raise RuntimeError(
@@ -52,7 +53,7 @@ def load_config(config_path: Path | None = None) -> Config:
     parser = ConfigParser()
     parser.read(config_path, encoding="utf-8")
 
-    def get_required(section: str, option: str) -> str | None:
+    def get_required(section: str, option: str) -> Optional[str]:
         if not parser.has_option(section, option):
             return None
         value = parser.get(section, option).strip()
@@ -82,7 +83,7 @@ def load_config(config_path: Path | None = None) -> Config:
         "ticktick", "base_url", fallback="https://api.ticktick.com"
     )
 
-    notify_chat_id: int | None = None
+    notify_chat_id: Optional[int] = None
     if notify_chat_id_raw:
         try:
             notify_chat_id = int(notify_chat_id_raw)
@@ -172,7 +173,7 @@ def format_due_datetime(due_datetime: datetime) -> str:
     return due_datetime.strftime("%d.%m.%Y %H:%M")
 
 
-def format_sender_label(sender_username: str | None, sender_name: str | None) -> str:
+def format_sender_label(sender_username: Optional[str], sender_name: Optional[str]) -> str:
     if sender_username:
         return f"@{sender_username}"
     return sender_name or "Неизвестный отправитель"
@@ -180,8 +181,8 @@ def format_sender_label(sender_username: str | None, sender_name: str | None) ->
 
 def format_task_text(
     message_text: str,
-    sender_username: str | None,
-    sender_name: str | None,
+    sender_username: Optional[str],
+    sender_name: Optional[str],
 ) -> str:
     sender_label = format_sender_label(sender_username, sender_name)
     return f"{sender_label} {message_text}"
