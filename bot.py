@@ -82,6 +82,14 @@ def build_task_payload(text: str, config: Config) -> dict:
     }
 
 
+def format_task_text(message_text: str, sender_username: str | None, sender_name: str | None) -> str:
+    if sender_username:
+        sender_label = f"@{sender_username}"
+    else:
+        sender_label = sender_name or "Неизвестный отправитель"
+    return f"{sender_label} {message_text}"
+
+
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
         await update.message.reply_text(
@@ -97,7 +105,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     config: Config = context.bot_data["config"]
-    payload = build_task_payload(text, config)
+    sender = update.message.from_user
+    task_text = format_task_text(
+        text,
+        sender.username if sender else None,
+        sender.full_name if sender else None,
+    )
+    payload = build_task_payload(task_text, config)
 
     async with httpx.AsyncClient(base_url=config.ticktick_base_url, timeout=10.0) as client:
         response = await client.post(
@@ -106,7 +120,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             headers={"Authorization": f"Bearer {config.ticktick_access_token}"},
         )
     if response.is_success:
-        await update.message.reply_text("Задача добавлена ✅")
+        await update.message.reply_text(f"Задача добавлена ✅\n{task_text}")
     else:
         logging.error(
             "TickTick API error %s: %s", response.status_code, response.text
