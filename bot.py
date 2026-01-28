@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from pathlib import Path
 import sys
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 if sys.version_info < (3, 9):
     from backports.zoneinfo import ZoneInfo
@@ -158,7 +158,7 @@ def infer_due_datetime(message_text: str, now: datetime, timezone: ZoneInfo) -> 
     return due
 
 
-def build_task_payload(text: str, config: Config) -> tuple[dict, datetime]:
+def build_task_payload(text: str, config: Config) -> Tuple[Dict[str, str], datetime]:
     now = datetime.now(config.timezone)
     due_datetime = infer_due_datetime(text, now, config.timezone)
     payload = {
