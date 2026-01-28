@@ -4,7 +4,12 @@ from configparser import ConfigParser
 from dataclasses import dataclass
 from datetime import datetime, time
 from pathlib import Path
-from zoneinfo import ZoneInfo
+import sys
+
+if sys.version_info < (3, 9):
+    from backports.zoneinfo import ZoneInfo
+else:
+    from zoneinfo import ZoneInfo
 
 from dateparser.search import search_dates
 import httpx
