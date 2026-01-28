@@ -19,6 +19,7 @@ Telegram-бот для добавления задач в TickTick. Каждое
 ```ini
 [telegram]
 bot_token=...                 # токен Telegram бота
+notify_chat_id=...            # чат ID для уведомлений о новых задачах (опционально)
 
 [ticktick]
 access_token=...              # OAuth access token TickTick
@@ -56,3 +57,4 @@ python bot.py
 ## Примечания
 - Сообщения `/start` обрабатываются отдельно и не создают задачи.
 - Если нужно изменить время дедлайна или формат, отредактируйте функцию `format_due_date` в `bot.py`.
+- Чтобы получать уведомления о новых задачах в личный аккаунт, укажите `notify_chat_id` в секции `[telegram]`.
