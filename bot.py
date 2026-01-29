@@ -296,7 +296,7 @@ def format_task_text(
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
         await update.message.reply_text(
-            "Привет!\nОтправь мне текст задачи, и я добавлю её в TickTick Антону.\nПри желании можешь указать в конце сообщения дату или время в любом формате, постараюсь их распознать.\nЕсли не смогу или распознаю неправильно - Антон поправит."
+            "Привет!\nОтправь мне текст задачи, и я добавлю её в TickTick Антону.\nПри желании можешь указать в конце сообщения дату или время в любом формате."
         )
 
 
@@ -329,7 +329,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
     if response.is_success:
         await update.message.reply_text(
-            f"Задача добавлена ✅\n{task_text}\nДедлайн: {due_label}"
+            f"Задача добавлена ✅\n{task_text}"
         )
         if config.notify_chat_id:
             await context.bot.send_message(
